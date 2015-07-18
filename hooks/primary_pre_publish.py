@@ -84,6 +84,8 @@ class PrimaryPrePublishHook(Hook):
             return self._do_photoshop_pre_publish(task, work_template, progress_cb)
         elif engine_name == "tk-mari":
             return self._do_mari_pre_publish(task, work_template, progress_cb)
+        elif engine_name == "tk-fusion":
+            return self._do_fusion_pre_publish(task, work_template, progress_cb)
         else:
             raise TankError("Unable to perform pre-publish for unhandled engine %s" % engine_name)
         
@@ -368,6 +370,35 @@ class PrimaryPrePublishHook(Hook):
         # currently there is no primary publish for Mari so just return
         return []
 
+    def _do_fusion_pre_publish(self, task, work_template, progress_cb):
+        """
+        Do Fusion primary pre-publish/scene validation
+
+        :param task:            The primary task to pre-publish
+        :param work_template:   The primary work template to use
+        :param progress_cb:     A callback to use when reporting any progress
+                                to the UI
+        :returns:               A list of any errors or problems that were found
+                                during pre-publish
+        """
+        import PeyeonScript
+        f_connection = PeyeonScript.scriptapp ("Fusion")
+        the_comp = f_connection.GetCurrentComp ()
+        
+        progress_cb(0.0, "Validating current scene", task)
+        
+        # get scene path
+        scene_path = the_comp.GetAttrs ('COMPS_FileName')
+        self.parent.log_info ("Fusion Scene_Path: " + scene_path)
+        # validate it:
+        scene_errors = self._validate_work_file(scene_path, work_template, task["output"], progress_cb)
+        
+        progress_cb(100)
+
+        self.parent.log_info("Scene Errors: " + str(scene_errors))
+          
+        return scene_errors
+
 
     def _validate_work_file(self, path, work_template, output, progress_cb):
         """
@@ -400,6 +431,9 @@ class PrimaryPrePublishHook(Hook):
         # check the version number against existing work file versions to avoid accidentally
         # bypassing more recent work!
         existing_versions = self.parent.tank.paths_from_template(work_template, fields, ["version"])
+        
+        self.parent.log_debug("existing_versions: " + str(existing_versions))
+
         version_numbers = [ work_template.get_fields(v).get("version") for v in existing_versions]
         curr_v_no = fields["version"]
         max_v_no = max(version_numbers)
