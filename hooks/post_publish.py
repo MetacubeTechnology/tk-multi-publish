@@ -426,11 +426,44 @@ class PostPublishHook(Hook):
         # log info
         self.parent.log_debug("Version up work file %s --> %s..." % (scene_path, new_scene_path))
         
+        # updating saver nodes
+        progress_cb (50, "Updating Saver Nodes")
+
+        self.update_fusion_saver_nodes (the_comp, new_scene_path)
+
         # rename and save the file
-        progress_cb(50, "Saving the scene file")
+        progress_cb(80, "Saving the scene file")
         the_comp.Save (new_scene_path)
         
         progress_cb(100)
+
+    def update_fusion_saver_nodes (self, the_comp, file_path):
+        try:
+            only_selected_nodes = False
+            list_of_tools = the_comp.GetToolList (only_selected_nodes, "Saver")
+            self.parent.log_debug ("List of tools values are: %s" % list_of_tools)
+            for index, tool in list_of_tools.iteritems ():
+                is_saver_node = tool.GetData ("Shotgun_Saver_Node")
+                if is_saver_node:
+                    self.parent.log_debug ("Saver node was FOUND!: %s" % tool)
+                    work_template_name = tool.GetData ("Work_Template")
+
+                    self.parent.log_info("Detected Node work template: %s" % str(work_template_name))
+
+                    self.parent.log_info(str(self.parent.sgtk.templates))
+
+                    work_template_obj = self.parent.sgtk.templates[work_template_name]
+                    fields = work_template_obj.get_fields (file_path)
+                    render_template_name = tool.GetData ("Render_Template")
+
+                    self.parent.log_info("Detected Node render template: %s" % str(render_template_name))
+
+                    render_template_obj = self.parent.sgtk.templates[render_template_name]
+                    new_render_path = render_template_obj.apply_fields (fields).replace ("%04d", "")
+                    tool.Clip = new_render_path
+        except:
+            import traceback
+            self.parent.log_error(traceback.format_exc())
 
     def _get_next_work_file_version(self, work_template, fields):
         """
